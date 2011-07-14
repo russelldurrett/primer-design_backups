@@ -1,0 +1,248 @@
+#perl;
+#biobrickprimers script
+
+# This script prompts the user for a DNA sequence, then outputs forward and reverse primer sequences with biobrick restriction site extensions. It does not, as yet, calculate possible primer dimers but it does output the Tm of the complementary region of each oligo.
+# Designed by Russell Durrett, June 2010. Email russell (at) durrett.org
+# Enthalpy and Entropy hashes courtesy of David Gresham, NYU
+
+# UNRESOLVED :  primer dimers, 
+
+use 5.010;
+
+print "This script will take a DNA sequence and design primers for 'biobricking' the sequence. It automatically adds Biobricking primer extensions - if you don't want those then consult the script 'primerdesign' instead. \n\n";
+
+
+say "DNA sequence to biobrick: ";
+my $DNA = <STDIN>;
+
+
+#Defines forward primer as first 20 bases
+
+my $fprimer = substr ($DNA, 0, 20);
+
+
+#Defines reverse primer as last 20 bases
+
+&rprimer;
+my $rprimer = substr ($DNArc, 1, 20);
+
+sub rprimer {
+	#print "taking reverse...\n\n";
+	$_ = reverse $DNA;
+	tr /AGCTagct/TCGAtcga/d;
+	$DNArc = $_;
+}
+
+print "\nForward primer: ";
+print &Tm($fprimer), "\n" ;
+print "$fprimer\n";
+print "\n";
+
+print "Reverse primer: " ;
+print &Tm($rprimer), "\n" ;
+print "$rprimer\n";
+print "\n";
+
+
+$fext = "CGCGCGAGAATTCGCGGCCGCTTCTAGA";
+$rext = "GCGCGCACTGCAGCGGCCGCTACTAGT";
+
+
+my $fprimer_wext = $fext . $fprimer;
+my $rprimer_wext = $rext . $rprimer;
+
+say "";
+say "Forward primer with Biobrick Prefix Extension:";
+print "$fprimer_wext\n\n";
+say "Reverse primer with Biobrick Suffix R.C. Extension:";
+print "$rprimer_wext\n";
+say "";
+
+say "\nThis script now calculates the Tm of the complementary region of the primers, but does not check for primer dimers (yet - as soon as I figure how to do that in Perl it will) - so ALWAYS TEST YOUR PRIMERS BEFORE ORDERING!!!\n";
+
+
+##Perl script to calculate Tm of oligos
+## Nearest Neighbor Tm subroutines were courtesy of a script written by David Gresham
+
+sub Tm { 
+
+my $seq = shift @_; 
+ 
+$seq = uc($seq);
+
+print "\n";
+print "Tm: ", &calcTm(&calcNnEnthalpy($seq), &calcNnEntropy($seq));
+
+}
+
+#######subroutine to calculate Tm based on total enthalpy and entropy
+
+sub calcTm {
+
+    my ($totalEnthalpy, $totalEntropy) = @_;
+
+    my $R = 1.9872; #gas constant cal/K-mol
+    my $x = 4; #equals 4 for nonself-complementary duplex
+    my $Ct = 0.0000000000006; #$Ct is strand concentration 
+    
+    my $Tm = ($totalEnthalpy * 1000) / ($totalEntropy + $R * log($Ct/$x)) - 273.15;
+
+    return $Tm;
+
+}
+
+
+
+#######subroutine to calculate enthalpy by summing over nearest neighbors using the unified nearest neighbor values                  
+sub calcNnEnthalpy {
+
+#print "Calculating Enthalpy..\n";
+
+    my $dna = shift(@_);
+
+    my %enthalpies = (
+        'AA' => -7.9,
+        'TT' => -7.9,                                                                                                        
+        'AT' => -7.2,                                                                                                        
+        'TA' => -7.2,                                                                                                        
+        'CA' => -8.5,                                                                                                        
+        'TG' => -8.5,                                                                                                        
+        'GT' => -8.4,                                                                                                        
+        'AC' => -8.4,                                                                                                        
+        'CT' => -7.8,                                                                                                        
+        'AG' => -7.8,                                                                                                        
+        'GA' => -8.2,                                                                                                        
+        'TC' => -8.2,                                                                                                        
+        'CG' => -10.6,                                                                                                      
+        'GC' => -9.8,                                                                                                       
+        'GG' => -8.0,                                                                                                        
+        'CC' => -8.0                                                                                                          
+        );
+
+#select initialization value depending on whether terminal bases are A/T                                                            
+#initialization and terminal penalty are not relevant for array hybridization 
+
+    my $totalEnthalpy;
+
+    if((substr($dna,0,1) eq 'A' || substr($dna,0,1) eq 'T') && (substr($dna,-1) eq 'A'|| substr($dna,-1) eq 'T'))
+    {$totalEnthalpy = 0;} # 4.6;}                                                                                                   
+
+    elsif((substr($dna,-1) eq 'A'|| substr($dna,-1) eq 'T') && (substr($dna,-1) ne 'A'|| substr($dna,-1) ne 'T'))
+    {$totalEnthalpy = 0;} # 2.4;}                                                                                                   
+
+    elsif((substr($dna,-1) ne 'A' || substr($dna,-1) ne 'T') && (substr($dna,-1) eq 'A' || substr($dna,-1) eq 'T'))
+    {$totalEnthalpy = 0;} #2.4;}                                                                                                    
+
+    else{$totalEnthalpy = 0;} #= 0.2};                                                                                              
+
+#calculate total enthalpy based on each NN for oligo                                                                                
+
+    for(my $i=0; $i< (length($dna) - 1); $i++) {
+
+        $totalEnthalpy += $enthalpies{substr($dna,$i,2)};
+
+    }
+
+    return $totalEnthalpy;
+
+}
+
+#####subroutine to calculate entropy by summing over nearest neighbors using the nearest neighbor parameters
+#initialization and terminal penalty are not relevant for array hybridization                         
+
+sub calcNnEntropy {
+
+#print "Calculating Entropy..\n";
+
+    my $dna = shift(@_);
+
+    my %entropies = (
+        'AA' => -22.2,
+        'TT' => -22.2,
+        'AT' => -20.4,
+        'TA' => -21.3,
+        'CA' => -22.7,
+        'TG' => -22.7,
+        'GT' => -22.4,
+        'AC' => -22.4,
+        'CT' => -21.0,
+        'AG' => -21.0,
+        'GA' => -22.2,
+        'TC' => -22.2,
+        'CG' => -27.2,
+        'GC' => -24.4,
+        'GG' => -19.9,
+        'CC' => -19.9
+        );
+
+#initialize total entropy depending on whether there are terminal A/T                                                                                    
+
+    my $totalEntropy;
+
+    if((substr($dna,0,1) eq 'A' || substr($dna,0,1) eq 'T') && (substr($dna,-1) eq 'A'|| substr($dna,-1) eq 'T'))
+    {$totalEntropy = 0;} #8.1;}                                                                                                                          
+
+    elsif((substr($dna,-1) eq 'A'|| substr($dna,-1) eq 'T') && (substr($dna,-1) ne 'A'|| substr($dna,-1) ne 'T'))
+    {$totalEntropy = 0;} #1.2;}                                                                                                                          
+
+    elsif((substr($dna,-1) ne 'A' || substr($dna,-1) ne 'T') && (substr($dna,-1) eq 'A' || substr($dna,-1) eq 'T'))
+    {$totalEntropy = 0;} #1.2;}                                                                                                                          
+
+    else {$totalEntropy = 0;} #-5.7;}                                                                                                                    
+
+#add together entropies for each NN in string                                                                                                            
+
+    for(my $i=0; $i < (length($dna) - 1); $i++) {
+
+        $totalEntropy += $entropies{substr($dna,$i,2)};
+    }
+
+    return $totalEntropy;
+
+}
+#######subroutine to calculate deltaG at 37C by summing over nearest neighbors using the unified nearest neighbors values
+
+sub calcDeltaG37 {
+
+    my $dna = shift(@_);
+
+    my %deltaG37 = (
+        'AA' => -1.0,
+        'TT' => -1.0,
+        'AT' => -0.88,
+        'TA' => -0.58,
+        'CA' => -1.45,
+        'TG' => -1.45,
+        'GT' => -1.44,
+        'AC' => -1.44,
+        'CT' => -1.28,
+        'AG' => -1.28,
+        'GA' => -1.30,
+        'TC' => -1.30,
+        'CG' => -2.17,
+        'GC' => -2.24,
+        'GG' => -1.84,
+        'CC' => -1.84
+        );
+
+    my $totalDeltaG37;
+
+    if((substr($dna,0,1) eq 'A' || substr($dna,0,1) eq 'T') && (substr($dna,-1) eq 'A'|| substr($dna,-1) eq 'T'))
+    {$totalDeltaG37 = 2.06;}
+
+    elsif((substr($dna,-1) eq 'A'|| substr($dna,-1) eq 'T') && (substr($dna,-1) ne 'A'|| substr($dna,-1) ne 'T'))
+    {$totalDeltaG37 = 2.01;}
+
+    elsif((substr($dna,-1) ne 'A' || substr($dna,-1) ne 'T') && (substr($dna,-1) eq 'A' || substr($dna,-1) eq 'T'))
+    {$totalDeltaG37 = 2.01;}
+
+    else {$totalDeltaG37 = 1.96;}
+
+    for(my $i=0; $i < (length($dna) - 1); $i++) {
+  
+        $totalDeltaG37 += $deltaG37{substr($dna,$i,2)};
+    }
+
+    return $totalDeltaG37;
+
+}
